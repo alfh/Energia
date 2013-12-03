@@ -272,12 +272,22 @@ uint16_t analogRead(uint8_t pin)
     //  0111 A7
     //  1010 Internal temperature sensor
 
-    //TODO: Only int. temp. sensor requires Tsample > 30us.
-    // The below ADC configuration applies this rule to all channels right now.
+    // ADC10 : TODO: Only int. temp. sensor requires Tsample > 30us.
+    // ADC10 : The below ADC configuration applies this rule to all channels right now.
+    // ADC10 : See http://www.ti.com/lit/ug/slau315b/slau315b.pdf
     // ADC10CLK = 5MHz / 5 = 1Mhz
-    // Tsample = S&H / ADC10CLK = 64 / 1 MHz = 64 us
-    // Tconvert = 13 / ADC10CLK = 13 / 1 MHz = 13 us
-    // Total time per sample = Tconvert + Tsample = 64 + 13 = 67 us = ~15k samples / sec
+    // ADC10 : Tsample = S&H / ADC10CLK = 64 / 1 MHz = 64 us
+    // ADC10 : Tconvert = (12 + 1) / ADC10CLK = 13 / 1 MHz = 13 us
+    // ADC10 : Total time per sample = Tconvert + Tsample + __delay_cycles = 64 + 13 + 8 = 85 us = ~12k samples / sec
+
+    // ADC12 : Int. temp. sensor requires Tsample > 100us.
+    // ADC12 : TODO The below ADC configuration applies Tsample > 30us to all channels right now, except
+    //         for int. temp. sensor, where Tsample > 100us is applied.
+    // ADC12 : See http://www.ti.com/lit/ug/slau406b/slau406b.pdf
+    // ADC12CLK = 5MHz / 5 = 1Mhz
+    // ADC12 : Tsample = S&H / ADC10CLK = 64 / 1 MHz = 64 us
+    // ADC12 : Tconvert = (13 for 12bit resolution) / ADC10CLK = 13 / 1 MHz = 13 us
+    // ADC12 : Total time per sample = Tconvert + Tsample = 64 + 13 + 8 = 85 us = ~12k samples / sec
 
 #if defined(__MSP430_HAS_ADC10__)
     ADC10CTL0 &= ~ADC10ENC;                 // disable ADC
@@ -321,13 +331,17 @@ uint16_t analogRead(uint8_t pin)
     if (pin == TEMPSENSOR) {// if Temp Sensor 
         REFCTL0 = (INTERNAL1V5 & REF_MASK);                  // Set reference to internal 1.5V
         ADC12MCTL0 = pin | ((INTERNAL1V5 >> 4) & REFV_MASK); // set channel and reference 
+        // Internal temperature sensors needs minimum 100us sample time, page 72 on http://www.ti.com/lit/ds/slas590l/slas590l.pdf
+        ADC12CTL0 = ADC12ON | ADC12SHT0_6;      // turn ADC ON; sample + hold @ 128 × ADC12CLKs
     } else {
         REFCTL0 = (analog_reference & REF_MASK);                  // Set reference using masking off the SREF bits. See Energia.h.
         ADC12MCTL0 = pin | ((analog_reference >> 4) & REFV_MASK); // set channel and reference 
+        // Use 64us sample time like for the general ADC10 cases
+        ADC12CTL0 = ADC12ON | ADC12SHT0_4;      // turn ADC ON; sample + hold @ 64 × ADC12CLKs
     }
-    ADC12CTL0 = ADC12ON | ADC12SHT0_4;      // turn ADC ON; sample + hold @ 64 × ADC10CLKs
     ADC12CTL1 |= ADC12SHP;                  // ADCCLK = MODOSC; sampling timer
     ADC12CTL2 |= ADC12RES1;                 // 12-bit resolution
+    ADC12CTL2 |= ADC12SR;                   // We require less than 50ksps, set bit to reduce power consumption
     ADC12IFG = 0;                           // Clear Flags
     ADC12IE |= ADC12IE0;                    // Enable interrupts
     __delay_cycles(128);                    // Delay to allow Ref to settle
