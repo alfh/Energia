@@ -17,9 +17,17 @@
 
 SPIClass SPI;
 
+#if defined(__MSP430_HAS_USCI_B1__)
+uint8_t SPIClass::spiModule = 0;
+#endif
+
 void SPIClass::begin()
 {
-    spi_initialize();
+#if defined(__MSP430_HAS_USCI_B1__)
+    spi_initialize(spiModule);
+#else
+    spi_initialize(0);
+#endif
 }
 
 void SPIClass::end()
@@ -41,3 +49,11 @@ void SPIClass::setClockDivider(uint8_t rate)
 {
     spi_set_divisor(rate);
 }
+
+void SPIClass::setModule(uint8_t module)
+{
+#if defined(__MSP430_HAS_USCI_B1__)
+    spiModule = module;
+#endif
+}
+
