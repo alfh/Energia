@@ -33,16 +33,6 @@
 
 #define SPI_MODE_MASK (UCCKPL | UCCKPH)
 
-/**
- * spi_initialize() - Configure USCI UCB0 for SPI mode
- *
- * P2.0 - CS (active low)
- * P1.5 - SCLK
- * P1.6 - MISO aka SOMI
- * P1.7 - MOSI aka SIMO
- *
- */
-
 /* Calculate divisor to keep SPI clock close to 4MHz but never over */
 #ifndef SPI_CLOCK_SPEED
 #define SPI_CLOCK_SPEED 4000000L
@@ -56,19 +46,64 @@
 
 #define SPI_CLOCK_DIV_DEFAULT (F_CPU / 4)
 
+/* Pointers to USCI registers */
+volatile unsigned char* UCBxCTL0;
+volatile unsigned char* UCBxCTL1;
+volatile unsigned char* UCBxBR0;
+volatile unsigned char* UCBxBR1;
+volatile unsigned char* UCBxSTAT;
+const volatile unsigned char* UCBxRXBUF;
+volatile unsigned char* UCBxTXBUF;
+volatile unsigned char* UCBxIE;
+volatile unsigned char* UCBxIFG;
+volatile unsigned int* UCBxIV;
+volatile unsigned int* UCBxI2COA;
+volatile unsigned int* UCBxI2CSA;
+
+/**
+ * spi_initialize() - Configure USCI UCBx for SPI mode
+ */
 void spi_initialize(const uint8_t module)
 {
-	UCB0CTL1 = UCSWRST | UCSSEL_2;      // Put USCI in reset mode, source USCI clock from SMCLK
-	UCB0CTL0 = SPI_MODE_0 | UCMSB | UCSYNC | UCMST;  // Use SPI MODE 0 - CPOL=0 CPHA=0
+    /* Set pointers to correct USCI registers based on which module is being used */
+    UCBxCTL0 =     &UCB0CTL0;
+    UCBxCTL1 =     &UCB0CTL1;
+    UCBxBR0 =      &UCB0BR0;
+    UCBxBR1 =      &UCB0BR1;
+    UCBxSTAT =     &UCB0STAT;
+    UCBxRXBUF =    &UCB0RXBUF;
+    UCBxTXBUF =    &UCB0TXBUF;
+    UCBxIE =       &UCB0IE;
+    UCBxIFG =      &UCB0IFG;
+    UCBxI2COA =    &UCB0I2COA;
+    UCBxI2CSA =    &UCB0I2CSA;
+#if defined(__MSP430_HAS_USCI_B1__)
+    if(module == 1) {
+        UCBxCTL0 =     &UCB1CTL0;
+        UCBxCTL1 =     &UCB1CTL1;
+        UCBxBR0 =      &UCB1BR0;
+        UCBxBR1 =      &UCB1BR1;
+        UCBxSTAT =     &UCB1STAT;
+        UCBxRXBUF =    &UCB1RXBUF;
+        UCBxTXBUF =    &UCB1TXBUF;
+        UCBxIE =       &UCB1IE;
+        UCBxIFG =      &UCB1IFG;
+        UCBxI2COA =    &UCB1I2COA;
+        UCBxI2CSA =    &UCB1I2CSA;
+    }
+#endif
+
+	*UCBxCTL1 = UCSWRST | UCSSEL_2;      // Put USCI in reset mode, source USCI clock from SMCLK
+	*UCBxCTL0 = SPI_MODE_0 | UCMSB | UCSYNC | UCMST;  // Use SPI MODE 0 - CPOL=0 CPHA=0
 
 	pinMode_int(SCK, SPISCK_SET_MODE);
 	pinMode_int(MOSI, SPIMOSI_SET_MODE);
 	pinMode_int(MISO, SPIMISO_SET_MODE);
 
-	UCB0BR0 = SPI_CLOCK_DIV() & 0xFF;   // set initial speed to 4MHz
-	UCB0BR1 = (SPI_CLOCK_DIV() >> 8 ) & 0xFF;
+	*UCBxBR0 = SPI_CLOCK_DIV() & 0xFF;   // set initial speed to 4MHz
+	*UCBxBR1 = (SPI_CLOCK_DIV() >> 8 ) & 0xFF;
 
-	UCB0CTL1 &= ~UCSWRST;			    // release USCI for operation
+	*UCBxCTL1 &= ~UCSWRST;			    // release USCI for operation
 }
 
 /**
@@ -76,7 +111,7 @@ void spi_initialize(const uint8_t module)
  */
 void spi_disable(void)
 {
-    UCB0CTL1 |= UCSWRST;                // Put USCI in reset mode
+    *UCBxCTL1 |= UCSWRST;                // Put USCI in reset mode
 }
 
 /**
@@ -84,11 +119,11 @@ void spi_disable(void)
  */
 uint8_t spi_send(const uint8_t _data)
 {
-	UCB0TXBUF = _data; // setting TXBUF clears the TXIFG flag
-	while (UCB0STAT & UCBUSY)
+	*UCBxTXBUF = _data; // setting TXBUF clears the TXIFG flag
+	while (*UCBxSTAT & UCBUSY)
 		; // wait for SPI TX/RX to finish
 
-	return UCB0RXBUF; // reading clears RXIFG flag
+	return *UCBxRXBUF; // reading clears RXIFG flag
 }
 
 /***SPI_MODE_0
@@ -99,10 +134,10 @@ uint8_t spi_send(const uint8_t _data)
  */
 void spi_set_divisor(const uint16_t clkdiv)
 {
-	UCB0CTL1 |= UCSWRST;		// go into reset state
-	UCB0BR0 = clkdiv & 0xFF;
-	UCB0BR1 = (clkdiv >> 8 ) & 0xFF;
-	UCB0CTL1 &= ~UCSWRST;		// release for operation
+	*UCBxCTL1 |= UCSWRST;		// go into reset state
+	*UCBxBR0 = clkdiv & 0xFF;
+	*UCBxBR1 = (clkdiv >> 8 ) & 0xFF;
+	*UCBxCTL1 &= ~UCSWRST;		// release for operation
 }
 
 /**
@@ -110,9 +145,9 @@ void spi_set_divisor(const uint16_t clkdiv)
  */
 void spi_set_bitorder(const uint8_t order)
 {
-    UCB0CTL1 |= UCSWRST;        // go into reset state
-    UCB0CTL0 = (UCB0CTL0 & ~UCMSB) | ((order == 1 /*MSBFIRST*/) ? UCMSB : 0); /* MSBFIRST = 1 */
-    UCB0CTL1 &= ~UCSWRST;       // release for operation
+    *UCBxCTL1 |= UCSWRST;        // go into reset state
+    *UCBxCTL0 = (*UCBxCTL0 & ~UCMSB) | ((order == 1 /*MSBFIRST*/) ? UCMSB : 0); /* MSBFIRST = 1 */
+    *UCBxCTL1 &= ~UCSWRST;       // release for operation
 }
 
 /**
@@ -120,25 +155,26 @@ void spi_set_bitorder(const uint8_t order)
  */
 void spi_set_datamode(const uint8_t mode)
 {
-    UCB0CTL1 |= UCSWRST;        // go into reset state
+    *UCBxCTL1 |= UCSWRST;        // go into reset state
     switch(mode) {
     case 0: /* SPI_MODE0 */
-        UCB0CTL0 = (UCB0CTL0 & ~SPI_MODE_MASK) | SPI_MODE_0;
+        *UCBxCTL0 = (*UCBxCTL0 & ~SPI_MODE_MASK) | SPI_MODE_0;
         break;
     case 1: /* SPI_MODE1 */
-        UCB0CTL0 = (UCB0CTL0 & ~SPI_MODE_MASK) | SPI_MODE_1;
+        *UCBxCTL0 = (*UCBxCTL0 & ~SPI_MODE_MASK) | SPI_MODE_1;
         break;
     case 2: /* SPI_MODE2 */
-        UCB0CTL0 = (UCB0CTL0 & ~SPI_MODE_MASK) | SPI_MODE_2;
+        *UCBxCTL0 = (*UCBxCTL0 & ~SPI_MODE_MASK) | SPI_MODE_2;
         break;
     case 4: /* SPI_MODE3 */
-        UCB0CTL0 = (UCB0CTL0 & ~SPI_MODE_MASK) | SPI_MODE_3;
+        *UCBxCTL0 = (*UCBxCTL0 & ~SPI_MODE_MASK) | SPI_MODE_3;
         break;
     default:
         break;
     }
-    UCB0CTL1 &= ~UCSWRST;       // release for operation
+    *UCBxCTL1 &= ~UCSWRST;       // release for operation
 }
 #else
     //#error "Error! This device doesn't have a USCI peripheral"
 #endif
+
