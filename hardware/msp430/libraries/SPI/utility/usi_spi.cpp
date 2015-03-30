@@ -45,7 +45,7 @@ static enum USI5 bResetAdjust;
  * P1.7 - MISO aka SOMI
  */
 
-void spi_initialize(void)
+void spi_initialize(const uint8_t module)
 {
     USICTL0  |= USISWRST;                   // put USI in reset mode, source USI clock from SMCLK
     USICTL0  |= USIPE5 | USIPE6 | USIPE7 | USIMST | USIOE;

@@ -42,7 +42,7 @@
  * P1.7 - MOSI aka SIMO
  *
  */
-void spi_initialize(void)
+void spi_initialize(const uint8_t module)
 {
 	/* Put USCI in reset mode, source USCI clock from SMCLK. */
 	UCB0CTLW0 = UCSWRST | UCSSEL_2;

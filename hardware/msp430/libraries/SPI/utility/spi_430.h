@@ -40,7 +40,7 @@
     #error "SPI not supported by hardware on this chip"
 #endif
 
-void spi_initialize(void);
+void spi_initialize(const uint8_t module);
 void spi_disable(void);
 uint8_t spi_send(const uint8_t);
 void spi_set_bitorder(const uint8_t);
@@ -48,3 +48,4 @@ void spi_set_datamode(const uint8_t);
 void spi_set_divisor(const uint16_t clkdivider);
 
 #endif /*_SPI_430_H_*/
+
